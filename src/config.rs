@@ -109,6 +109,7 @@ pub struct ASRConfig {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Config {
     pub addr: String,
+    pub device_tocken: String,
 
     pub hello_wav: Option<String>,
     pub background_gif: Option<String>,

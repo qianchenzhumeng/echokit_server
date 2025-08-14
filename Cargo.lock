@@ -483,6 +483,7 @@ dependencies = [
  "aho-corasick",
  "anyhow",
  "axum",
+ "axum-core",
  "axum-extra",
  "base64",
  "bytes",

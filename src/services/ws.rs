@@ -1,4 +1,5 @@
 use std::{collections::HashMap, sync::Arc, vec};
+use axum_core::body::Body;
 
 use axum::{
     body::Bytes,
@@ -49,6 +50,7 @@ pub struct WsPool {
     pub hello_wav: Option<Vec<u8>>,
     pub bg_gif: Option<Vec<u8>>,
     pub tool_set: ToolSet<McpToolAdapter>,
+    pub device_tocken: String,
 }
 
 impl WsPool {
@@ -57,6 +59,7 @@ impl WsPool {
         bg_gif: Option<Vec<u8>>,
         config: AIConfig,
         tool_set: ToolSet<McpToolAdapter>,
+        device_tocken: String,
     ) -> Self {
         Self {
             config,
@@ -64,6 +67,7 @@ impl WsPool {
             hello_wav,
             bg_gif,
             tool_set,
+            device_tocken,
         }
     }
 }
@@ -83,34 +87,39 @@ impl WsPool {
 pub async fn ws_handler(
     Extension(pool): Extension<Arc<WsPool>>,
     ws: WebSocketUpgrade,
-    Path(id): Path<String>,
+    Path((tocken, id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let request_id = uuid::Uuid::new_v4().as_u128();
-    log::info!("{id}:{request_id:x} connected.");
+    log::info!("device:{id}, tocken: {tocken}");
+    if tocken.eq(&pool.device_tocken) {
+        let request_id = uuid::Uuid::new_v4().as_u128();
+        log::info!("{id}:{request_id:x} connected.");
 
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<WsCommand>();
-    {
-        pool.connections
-            .write()
-            .await
-            .insert(id.clone(), (request_id, tx));
-    }
-
-    ws.on_upgrade(move |socket| async move {
-        let id = id.clone();
-        let pool = pool.clone();
-        if let Err(e) = handle_socket(socket, &id, rx, pool.clone()).await {
-            log::error!("{id}:{request_id:x} error: {e}");
-        };
-        log::info!("{id}:{request_id:x} disconnected.");
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<WsCommand>();
         {
-            let mut pool = pool.connections.write().await;
-            let (uuid_, _) = pool.get(&id).unwrap();
-            if request_id == *uuid_ {
-                pool.remove(&id);
-            }
+            pool.connections
+                .write()
+                .await
+                .insert(id.clone(), (request_id, tx));
         }
-    })
+        ws.on_upgrade(move |socket| async move {
+            let id = id.clone();
+            let pool = pool.clone();
+            if let Err(e) = handle_socket(socket, &id, rx, pool.clone()).await {
+                log::error!("{id}:{request_id:x} error: {e}");
+            };
+            log::info!("{id}:{request_id:x} disconnected.");
+            {
+                let mut pool = pool.connections.write().await;
+                let (uuid_, _) = pool.get(&id).unwrap();
+                if request_id == *uuid_ {
+                    pool.remove(&id);
+                }
+            }
+        })
+    } else {
+        log::info!("Unauthorized.");
+        axum::response::Response::new(Body::empty())
+    }
 }
 
 enum WsEvent {

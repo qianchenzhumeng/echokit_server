@@ -76,13 +76,14 @@ async fn routes(
 
     let mut router = Router::new()
         // .route("/", get(handler))
-        .route("/ws/{id}", any(services::ws::ws_handler))
+        .route("/ws/{tocken}/{id}", any(services::ws::ws_handler))
         .nest("/record", services::file::new_file_service("./record"))
         .layer(axum::Extension(Arc::new(services::ws::WsPool::new(
             hello_wav,
             bg_gif,
             config.config,
             tool_set,
+            config.device_tocken,
         ))));
 
     if let Some(real_config) = real_config {
